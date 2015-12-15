@@ -64,7 +64,6 @@ namespace PDFExploder
                         startpage = endpage;
 
                         //Get next date string
-                        //int datestartidx = currentText.IndexOf("/") - 2;
                         datestring = GetDatePos(currentText); // Convert.ToDateTime(currentText.Substring(datestartidx, 8).TrimStart()).ToShortDateString().Replace("/", "_");
 
                     }
@@ -89,6 +88,8 @@ namespace PDFExploder
 
             int firstSlashidx = currentText.IndexOf("/");
 
+            //If you find a slash before the date  like BA/Programmer move to the next slash
+            //obviously this isn't totally comprehensive, but it gets the job done
             if (int.TryParse(currentText[firstSlashidx - 1].ToString(), out theDigit))
             {
                 startidx = firstSlashidx - 2;
