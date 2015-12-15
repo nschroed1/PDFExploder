@@ -15,23 +15,23 @@ namespace PDFExploder
         {
             StringBuilder textstuff = new StringBuilder();
 
-            using (var pdfReader = new PdfReader("c:\\temp\\reviews2015.pdf"))
+            using (var pdfReader = new PdfReader("c:\\temp\\reviews2014B.pdf"))
             {
                 int startpage = 1, endpage = 0;
                 string datestring = string.Empty;
                 PdfDocument outputDocument = new PdfDocument();
+                string outputName = string.Empty;
+                string name = string.Empty;
 
                 // Loop through each page of the document
-                for (var page = 1; page <= /*pdfReader.NumberOfPages*/1000; page++)
+                for (var page = 1; page <= pdfReader.NumberOfPages; page++)
                 {
                     ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
 
-                    endpage++;
-
                     var currentText = PdfTextExtractor.GetTextFromPage(
-                     pdfReader,
-                     page,
-                     strategy);
+                    pdfReader,
+                    page,
+                    strategy);
 
                     currentText =
                         Encoding.UTF8.GetString(Encoding.Convert(
@@ -39,36 +39,74 @@ namespace PDFExploder
                             Encoding.UTF8,
                             Encoding.Default.GetBytes(currentText)));
 
+
+
+                    /*  if (startpage == endpage -1000000)
+                      {
+                         // datestring = GetDatePos(currentText);
+
+                          //Get the Employee info
+                          int startidx = currentText.LastIndexOf("Review") + 9;
+                          int endidx = currentText.IndexOf("Page ", startidx) - 1;
+                          int nameLength = endidx - startidx;
+
+                          name = currentText.Substring(startidx, nameLength);
+                          outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
+
+                      } */
+
+
+
+
                     //The first page - need to pull the date off this
                     //This only runs the first time
-                    if (startpage == endpage)
+                    if (startpage == 1 && endpage == 0)
                     {
                         datestring = GetDatePos(currentText);
-                    }
-
-                    if (currentText.Contains("Instructions for the Reviewer") && endpage > startpage )
-                    {
-                        Console.WriteLine(string.Format("Found new review at page {0} - Extracting...",page.ToString()) );
-
-                        
+                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
                         //Get the Employee info
-                        int startidx = currentText.LastIndexOf('-') + 2;
-                        int endidx = currentText.IndexOf("Page ",startidx) - 1;
+                        int startidx = currentText.LastIndexOf("Review") + 9;
+                        int endidx = currentText.IndexOf("Page ", startidx) - 1;
                         int nameLength = endidx - startidx;
 
-                        string name = currentText.Substring(startidx, nameLength);
-                        string ouputName = string.Format("c:\\temp\\{0}__{1}.pdf",name,datestring).Replace(" ","");
+                        name = currentText.Substring(startidx, nameLength);
+                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
+                    }
 
-                        ExtractPages("c:\\temp\\reviews2015.pdf", ouputName, startpage, endpage - 1);
+                    if (currentText.Contains("Instructions for the Reviewer") && endpage > startpage)
+                    {
+                        Console.WriteLine(string.Format("Found new review at page {0} - Extracting...", page.ToString()));
+
+
+                        ////Get the Employee info
+                        //int startidx = currentText.LastIndexOf("Review") + 9;
+                        //int endidx = currentText.IndexOf("Page ",startidx) - 1;
+                        //int nameLength = endidx - startidx;
+
+                        //string name = currentText.Substring(startidx, nameLength);
+                        //string ouputName = string.Format("c:\\temp\\{0}__{1}.pdf",name,datestring).Replace(" ","");
+
+                        ExtractPages("c:\\temp\\reviews2014B.pdf", outputName, startpage, endpage);
                         Console.WriteLine("File extracted!");
-                        startpage = endpage;
+
+                        //  endpage--;
+                        startpage = endpage + 1;
 
                         //Get next date string
+                        //int datestartidx = currentText.IndexOf("/") - 2;
                         datestring = GetDatePos(currentText); // Convert.ToDateTime(currentText.Substring(datestartidx, 8).TrimStart()).ToShortDateString().Replace("/", "_");
+
+                        int startidx = currentText.LastIndexOf("Review") + 9;
+                        int endidx = currentText.IndexOf("Page ", startidx) - 1;
+                        int nameLength = endidx - startidx;
+
+                        name = currentText.Substring(startidx, nameLength);
+                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
 
                     }
 
-                   // textstuff.Append(currentText);
+                    endpage++;
+                    // textstuff.Append(currentText);
                 }
             }
 
@@ -88,8 +126,6 @@ namespace PDFExploder
 
             int firstSlashidx = currentText.IndexOf("/");
 
-            //If you find a slash before the date  like BA/Programmer move to the next slash
-            //obviously this isn't totally comprehensive, but it gets the job done
             if (int.TryParse(currentText[firstSlashidx - 1].ToString(), out theDigit))
             {
                 startidx = firstSlashidx - 2;
@@ -105,8 +141,8 @@ namespace PDFExploder
 
 
         }
-    static void ExtractPages(string sourcePdfPath, string outputPdfPath,
-    int startPage, int endPage)
+        static void ExtractPages(string sourcePdfPath, string outputPdfPath,
+        int startPage, int endPage)
         {
             PdfReader reader = null;
             Document sourceDocument = null;
