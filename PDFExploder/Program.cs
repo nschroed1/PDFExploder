@@ -6,28 +6,47 @@ using System.Threading.Tasks;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
+using System.IO;
 
 namespace PDFExploder
 {
     class Program
     {
+        enum EmployeeTypes
+        {
+            Active,
+            Terminated,
+            L
+        }
+
+        static StringBuilder importTemplate = new StringBuilder();
+
         static void Main(string[] args)
         {
             StringBuilder textstuff = new StringBuilder();
+            string mainFileLoc = "c:\\temp\\reviews2015.pdf";
+            Dictionary<string, int> idnumbers = new Dictionary<string, int>();
+            List<string> reviewNames = new List<string>();
 
-            using (var pdfReader = new PdfReader("c:\\temp\\reviews2014B.pdf"))
+            //Get the dictionary of Last, First M - Employeeid
+            idnumbers = GetIds();
+         
+            using (var pdfReader = new PdfReader(mainFileLoc))
             {
                 int startpage = 1, endpage = 0;
                 string datestring = string.Empty;
                 PdfDocument outputDocument = new PdfDocument();
                 string outputName = string.Empty;
                 string name = string.Empty;
+                string uniqueName = string.Empty;
+                int reviewcount = 1;
 
                 // Loop through each page of the document
-                for (var page = 1; page <= pdfReader.NumberOfPages; page++)
+                for (var page = 1; page <= /*pdfReader.NumberOfPages*/250; page++) 
                 {
                     ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
 
+                    //Get the PDF Page
                     var currentText = PdfTextExtractor.GetTextFromPage(
                     pdfReader,
                     page,
@@ -38,25 +57,6 @@ namespace PDFExploder
                             Encoding.Default,
                             Encoding.UTF8,
                             Encoding.Default.GetBytes(currentText)));
-
-
-
-                    /*  if (startpage == endpage -1000000)
-                      {
-                         // datestring = GetDatePos(currentText);
-
-                          //Get the Employee info
-                          int startidx = currentText.LastIndexOf("Review") + 9;
-                          int endidx = currentText.IndexOf("Page ", startidx) - 1;
-                          int nameLength = endidx - startidx;
-
-                          name = currentText.Substring(startidx, nameLength);
-                          outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
-
-                      } */
-
-
-
 
                     //The first page - need to pull the date off this
                     //This only runs the first time
@@ -70,47 +70,139 @@ namespace PDFExploder
                         int nameLength = endidx - startidx;
 
                         name = currentText.Substring(startidx, nameLength);
-                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
+                         uniqueName = string.Format("{0}__{1}", name, datestring); ;
+                        reviewNames.Add(name);
+
+                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring);//.Replace(" ", "");
                     }
 
                     if (currentText.Contains("Instructions for the Reviewer") && endpage > startpage)
                     {
-                        Console.WriteLine(string.Format("Found new review at page {0} - Extracting...", page.ToString()));
+                        Console.WriteLine(string.Format("Found new review at page {0} - Extracting...{1}", page.ToString(),name));
 
+                        //Output the PDF
+                        ExtractPages(mainFileLoc, outputName, startpage, endpage);
 
-                        ////Get the Employee info
-                        //int startidx = currentText.LastIndexOf("Review") + 9;
-                        //int endidx = currentText.IndexOf("Page ",startidx) - 1;
-                        //int nameLength = endidx - startidx;
-
-                        //string name = currentText.Substring(startidx, nameLength);
-                        //string ouputName = string.Format("c:\\temp\\{0}__{1}.pdf",name,datestring).Replace(" ","");
-
-                        ExtractPages("c:\\temp\\reviews2014B.pdf", outputName, startpage, endpage);
+                        //Add a line for the import file
+                        AddImportLine(uniqueName, datestring, name, idnumbers);
                         Console.WriteLine("File extracted!");
 
-                        //  endpage--;
+                        //Start the next file
                         startpage = endpage + 1;
 
                         //Get next date string
-                        //int datestartidx = currentText.IndexOf("/") - 2;
-                        datestring = GetDatePos(currentText); // Convert.ToDateTime(currentText.Substring(datestartidx, 8).TrimStart()).ToShortDateString().Replace("/", "_");
+                        datestring = GetDatePos(currentText);
 
                         int startidx = currentText.LastIndexOf("Review") + 9;
                         int endidx = currentText.IndexOf("Page ", startidx) - 1;
                         int nameLength = endidx - startidx;
 
                         name = currentText.Substring(startidx, nameLength);
-                        outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
 
+                        //Due to the fact that there might be 3 2/28/15 reviews, we need to ensure that each file is unique
+                        uniqueName = string.Format("{0}__{1}", name, datestring);
+
+                        while (reviewNames.Contains(uniqueName))
+                        {
+                            reviewcount++;
+                            uniqueName = string.Format("{0}__{1}_{2}", name, datestring, reviewcount);
+                        }
+
+                        reviewcount = 1;
+                        reviewNames.Add(uniqueName);
+
+                        outputName = string.Format("c:\\temp\\{0}.pdf", uniqueName );
+                      //outputName = string.Format("c:\\temp\\{0}__{1}.pdf", name, datestring).Replace(" ", "");
                     }
 
+               
                     endpage++;
-                    // textstuff.Append(currentText);
+
+                }
+
+            }
+
+            CreateImportFile();
+            Console.ReadLine();
+        }
+
+        
+        static Dictionary<string, int> GetIds()
+        {
+            Dictionary<string, int> theIds = new Dictionary<string, int>();
+            string empFileLocA = "c:\\temp\\employees\\Active_Employees.csv";
+            string empFileLocT = "c:\\temp\\employees\\Term_Employees.csv";
+            string empFileLocL = "c:\\temp\\employees\\L_Employees.csv";
+
+            /* Add active Employees to list */
+            TextReader empFile = new StreamReader(empFileLocA);
+            string line = string.Empty;
+
+            while (empFile.Peek() != -1 )
+            {
+                line = empFile.ReadLine();
+                string[] parts = line.Split(',');
+                theIds.Add(string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim()), int.Parse(parts[2].Replace('"', ' ').Trim()));
+            }
+
+            empFile.Close();
+            /*  We've gotten the active employees added */
+
+            /* Add the termed employees */
+            empFile = new StreamReader(empFileLocT);
+
+            while (empFile.Peek() != -1)
+            {
+                line = empFile.ReadLine();
+                string[] parts = line.Split(',');
+                string key = string.Empty;
+                int idvalue = -1;
+
+                if (parts.Length == 4)
+                {
+                    //SPECIAL CASE
+                    //The user must be Edenfield, IV, Edward James
+                    key = "Edenfield, IV, Edward James";
+                    idvalue = int.Parse(parts[3].Replace('"', ' ').Trim());
+                }
+                else
+                {
+                    //The users name Last, First M
+                    key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim());
+                    idvalue = int.Parse(parts[2].Replace('"', ' ').Trim());
+                }
+               
+                if (!theIds.ContainsKey(key))
+                {
+                    theIds.Add(key,idvalue );
                 }
             }
 
-            Console.ReadLine();
+            empFile.Close();
+            /* Termed Employees added to list */
+
+            /* Added L Employeeds to List */
+            empFile = new StreamReader(empFileLocL);
+
+            while (empFile.Peek() != -1)
+            {
+                line = empFile.ReadLine();
+                string[] parts = line.Split(',');
+                //The users name Last, First M
+                string key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim());
+                int idvalue = int.Parse(parts[2].Replace('"', ' ').Trim());
+
+                if (!theIds.ContainsKey(key))
+                {
+                    theIds.Add(key, idvalue);
+                }
+            }
+            empFile.Close();
+            /* L Employeeds have been added to List */
+
+
+            return theIds; 
+
         }
 
         static string GetDatePos(string currentText)
@@ -141,6 +233,49 @@ namespace PDFExploder
 
 
         }
+
+        static void AddImportLine(string filename, string period, string name, Dictionary<string, int> idnumbers)
+        {
+            string importLine = string.Empty;
+            int employeeId = 0;
+            string docName = string.Empty;
+            string title = "Peformance Review" + period;
+
+            employeeId = idnumbers.ContainsKey(name) ? idnumbers[name] : -1;
+
+            string[] fileParts = filename.Split('_');
+
+            docName = string.Format("Perf_{0}_{1}",employeeId,period);
+
+            if (fileParts.Length == 6)
+            {
+                docName += "_" + fileParts[5];
+                title += "_" + fileParts[5];
+            }
+             
+            importLine = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                                        "Client Data",
+                                        employeeId.ToString(),
+                                        "Performance Based",
+                                        docName,
+                                        docName,
+                                        "FILE",
+                                        string.Format("\"{0}\"",filename),
+                                        title,
+                                        string.Format("\"{0}.pdf\"", filename));
+
+            importTemplate.AppendLine(importLine);
+ 
+        }
+
+        static void CreateImportFile()
+        {
+            TextWriter importFile = new StreamWriter("c:\\temp\\employees\\bfcinput.csv");
+            importFile.Write(importTemplate.ToString());
+            importFile.Close();
+        }
+
+        //Output the specified page range to a Separate PDF
         static void ExtractPages(string sourcePdfPath, string outputPdfPath,
         int startPage, int endPage)
         {
