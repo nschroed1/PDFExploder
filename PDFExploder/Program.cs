@@ -12,6 +12,73 @@ namespace PDFExploder
 {
     class Program
     {
+        static void ExpandW2()
+        {
+            StringBuilder textstuff = new StringBuilder();
+            string mainFileLoc = "c:\\temp\\W2\\BLIC2015W2sA.pdf";
+            string currentName = string.Empty;
+            string year = "2015";
+            Dictionary<string, int> idnumbers = GetIds();
+
+            using (var pdfReader = new PdfReader(mainFileLoc))
+            {
+                int startpage = 1, endpage = 0;
+                string datestring = string.Empty;
+                PdfDocument outputDocument = new PdfDocument();
+                string outputName = string.Empty;
+                string formattedName = string.Empty;
+                string uniqueName = string.Empty;
+                int reviewcount = 1;
+
+                // Loop through each page of the document
+                for (var page = 1; page <= pdfReader.NumberOfPages; page++)
+                {
+                    ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
+
+                    //Get the PDF Page
+                    var currentText = PdfTextExtractor.GetTextFromPage(
+                    pdfReader,
+                    page,
+                    strategy);
+
+                    currentText =
+                        Encoding.UTF8.GetString(Encoding.Convert(
+                            Encoding.Default,
+                            Encoding.UTF8,
+                            Encoding.Default.GetBytes(currentText)));
+
+                   //Name of the employee
+                   currentName = GetW2Name(currentText);
+
+                    //turn FIRST M LAST to Last, First M
+                    string[] tempName = currentName.Split(' ');
+
+                    if (tempName.Length > 2)
+                        formattedName = tempName[2] + ", " + tempName[0] + " " + tempName[1];
+                    else
+                        formattedName = tempName[1] + ", " + tempName[0];
+
+                   
+                   //Create file name
+                    outputName = string.Format("c:\\temp\\W2\\{0}__{1}.pdf", currentName, year).Replace(" ", "");
+                   //Create individual PDFS
+                    ExtractPages(mainFileLoc, outputName, page, page);
+
+                    currentName = currentName.Replace(" ", "");
+
+
+                    AddW2IImportLine(currentName, year, formattedName, idnumbers);
+
+                    Console.WriteLine("File extracted! " + currentName);
+                    CreateImportFile("c:\\temp\\W2\\bfcinput.csv");
+                   
+
+                }
+
+            }
+            Console.ReadLine();
+        }
+
         enum EmployeeTypes
         {
             Active,
@@ -23,8 +90,12 @@ namespace PDFExploder
 
         static void Main(string[] args)
         {
+            ExpandW2();
+
+            return;
+
             StringBuilder textstuff = new StringBuilder();
-            string mainFileLoc = "c:\\temp\\reviews2015.pdf";
+            string mainFileLoc = "c:\\temp\\reviews2014B.pdf";
             Dictionary<string, int> idnumbers = new Dictionary<string, int>();
             List<string> reviewNames = new List<string>();
 
@@ -42,7 +113,7 @@ namespace PDFExploder
                 int reviewcount = 1;
 
                 // Loop through each page of the document
-                for (var page = 1; page <= /*pdfReader.NumberOfPages*/250; page++) 
+                for (var page = 1; page <= pdfReader.NumberOfPages; page++) 
                 {
                     ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
 
@@ -122,7 +193,7 @@ namespace PDFExploder
 
             }
 
-            CreateImportFile();
+            CreateImportFile("c:\\temp\\employees\\bfcinput.csv");
             Console.ReadLine();
         }
 
@@ -142,7 +213,7 @@ namespace PDFExploder
             {
                 line = empFile.ReadLine();
                 string[] parts = line.Split(',');
-                theIds.Add(string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim()), int.Parse(parts[2].Replace('"', ' ').Trim()));
+                theIds.Add(string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim().ToUpper(), parts[1].Replace('"', ' ').Trim().ToUpper()), int.Parse(parts[2].Replace('"', ' ').Trim()));
             }
 
             empFile.Close();
@@ -168,7 +239,7 @@ namespace PDFExploder
                 else
                 {
                     //The users name Last, First M
-                    key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim());
+                    key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim().ToUpper(), parts[1].Replace('"', ' ').Trim().ToUpper());
                     idvalue = int.Parse(parts[2].Replace('"', ' ').Trim());
                 }
                
@@ -189,7 +260,7 @@ namespace PDFExploder
                 line = empFile.ReadLine();
                 string[] parts = line.Split(',');
                 //The users name Last, First M
-                string key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim(), parts[1].Replace('"', ' ').Trim());
+                string key = string.Format("{0}, {1}", parts[0].Replace('"', ' ').Trim().ToUpper(), parts[1].Replace('"', ' ').Trim().ToUpper());
                 int idvalue = int.Parse(parts[2].Replace('"', ' ').Trim());
 
                 if (!theIds.ContainsKey(key))
@@ -203,6 +274,22 @@ namespace PDFExploder
 
             return theIds; 
 
+        }
+
+        static string GetW2Name(string currentText)
+        {
+            string theName = string.Empty;
+            int startIdx = currentText.IndexOf("ZIP Code") + 8;
+            //Find Employee Box
+            int employeeIdx = currentText.IndexOf("Employee's name, address, and ZIP code");
+            int nameStartIdx = currentText.IndexOf('\n', employeeIdx) + 1;
+            int nameEndIdx = currentText.IndexOf('\n', nameStartIdx);
+
+            int nameLength = nameEndIdx - nameStartIdx;
+
+            theName = currentText.Substring(nameStartIdx, nameLength);
+
+            return theName; 
         }
 
         static string GetDatePos(string currentText)
@@ -231,7 +318,35 @@ namespace PDFExploder
 
             return thedate;
 
+            //Employee's name, address, and ZIP code
+        }
 
+        static void AddW2IImportLine(string filename, string year, string name, Dictionary<string, int> idnumbers)
+        {
+            string importLine = string.Empty;
+            string docName = string.Empty;
+            string title = "W2 " + year;
+            int employeeId = 0;
+
+            employeeId = idnumbers.ContainsKey(name) ? idnumbers[name] : -1;
+
+            string[] fileParts = filename.Split('_');
+
+            docName = string.Format("{0}_{1}", filename, year);
+
+        
+            importLine = string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}",
+                                        "Client Data",
+                                        employeeId.ToString(),
+                                        "W2",
+                                        docName,
+                                        docName,
+                                        "FILE",
+                                        string.Format("\"{0}\"", docName),
+                                        title,
+                                        string.Format("\"{0}.pdf\"", filename));
+
+            importTemplate.AppendLine(importLine);
         }
 
         static void AddImportLine(string filename, string period, string name, Dictionary<string, int> idnumbers)
@@ -268,9 +383,10 @@ namespace PDFExploder
  
         }
 
-        static void CreateImportFile()
+        static void CreateImportFile(string filePath )
         {
-            TextWriter importFile = new StreamWriter("c:\\temp\\employees\\bfcinput.csv");
+            //"c:\\temp\\employees\\bfcinput.csv"
+            TextWriter importFile = new StreamWriter(filePath);
             importFile.Write(importTemplate.ToString());
             importFile.Close();
         }
