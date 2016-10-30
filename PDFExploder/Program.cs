@@ -12,10 +12,137 @@ namespace PDFExploder
 {
     class Program
     {
+
+        static void OutputSlip(string thePayslip, string empName, string header)
+        {
+            string[] nameParts;
+            nameParts = empName.Split(',');
+            string filePath = string.Format("c:\\temp\\payslips\\{0}_{1}.txt",nameParts[1],nameParts[0]);
+            string pdfPath = string.Format("c:\\temp\\payslips\\{0}_{1}.pdf", nameParts[1], nameParts[0]);
+            TextWriter importFile = new StreamWriter(filePath);
+            importFile.Write(header);
+            importFile.WriteLine();
+            importFile.Write(thePayslip);
+            importFile.Close();
+
+            //Read the Data from Input File
+            StreamReader rdr = new StreamReader(filePath);
+            //Create a New instance on Document Class
+            Document doc = new Document();
+            //Create a New instance of PDFWriter Class for Output File
+            PdfWriter.GetInstance(doc, new FileStream(pdfPath, FileMode.Create));
+            //Open the Document
+            doc.Open();
+            Font theFont = new Font(Font.FontFamily.COURIER, 8);
+            //Add the content of Text File to PDF File
+            doc.Add(new Paragraph(rdr.ReadToEnd(),theFont));
+            //Close the Document
+            doc.Close();
+
+        }
+
+        static void ExtractPayslips()
+        {
+            //Read Files in the directory
+            DirectoryInfo di = new DirectoryInfo("C:\\temp\\W2s and Payslips\\Payslips\\2015");
+            FileInfo [] theFiles = di.GetFiles();
+            TextReader tr = null;
+            string currentLine = string.Empty;
+            StringBuilder payslipstring = new StringBuilder();
+            string empName = string.Empty;
+            bool gotName = false;
+            StringBuilder headerLine = new StringBuilder();
+            bool gotHeader = false;
+
+            foreach (FileInfo fi in theFiles )
+            {
+                using (tr = new StreamReader(fi.FullName))
+                {
+                    while (tr.Peek() != -1)
+                    { 
+                        currentLine = tr.ReadLine();
+
+                        if ( !gotHeader && currentLine.Contains("EARNINGS"))
+                        {
+                            headerLine.AppendLine(currentLine);
+                        }
+
+                        if (!gotHeader && currentLine.Contains("CONTRIBUTIONS") || gotHeader)
+                        {
+                            if (!gotHeader)
+                            {
+                                headerLine.AppendLine(currentLine);
+                                gotHeader = true;
+                            }
+
+
+
+                            //this should be a blank line
+                            if (currentLine.Contains("CONTRIBUTIONS"))
+                               currentLine = tr.ReadLine();
+
+                            gotName = false;
+
+                            //Now we are getting data
+                            while (!currentLine.Contains("TOTAL"))
+                            {
+                                currentLine = tr.ReadLine();
+
+                                if (!gotName)
+                                {
+                                    int nameStart = currentLine.IndexOf(" ");
+                                    int nameEnd = currentLine.IndexOf("      ");
+                                    empName = currentLine.Substring(nameStart, nameEnd - nameStart);
+                                    empName.Trim();
+                                    
+                                    gotName = true;
+                                }
+
+                                //remove continued verbiage
+                                if (currentLine.Contains("CONTINUED"))
+                                {
+                                    int x = 1;
+                                    //currentLine = currentLine
+
+                                    int end = currentLine.IndexOf("CONTINUED **") + 12;
+                                    string removeText = currentLine.Substring(0, end);
+                                    string newText = " ";
+                                    newText.PadRight(removeText.Length, ' ');
+
+                                    currentLine = currentLine.Replace(removeText, newText);
+                                }
+
+                                if (!currentLine.Contains(" PAYROLL REGISTER") 
+                                 && !currentLine.Contains(" BANKERS FINANCIAL")
+                                 && !currentLine.Contains("ENTITY")
+                                 && !currentLine.Contains("EMPLOYEE")
+                                 && !currentLine.Contains("CONTRIBUT")
+                                 && currentLine != ""
+                                 )
+                                    payslipstring.AppendLine(currentLine);
+
+                            }
+
+                            payslipstring.AppendLine(currentLine);
+                            //We now have a completed record
+                            OutputSlip(payslipstring.ToString(),empName, headerLine.ToString());
+
+                            payslipstring.Clear();
+                        }
+
+                    }
+                }
+
+
+            }
+
+            
+        }
+    
         static void ExpandW2()
         {
             StringBuilder textstuff = new StringBuilder();
-            string mainFileLoc = "c:\\temp\\W2\\BLIC2015W2sA.pdf";
+            string mainFileLoc = "c:\\temp\\W2\\2014\\W2_B01BIC_20141231_legal.pdf";
             string currentName = string.Empty;
             string year = "2015";
             Dictionary<string, int> idnumbers = GetIds();
@@ -60,7 +187,7 @@ namespace PDFExploder
 
                    
                    //Create file name
-                    outputName = string.Format("c:\\temp\\W2\\{0}__{1}.pdf", currentName, year).Replace(" ", "");
+                    outputName = string.Format("c:\\temp\\W2\\2014\\{0}__{1}.pdf", currentName, year).Replace(" ", "");
                    //Create individual PDFS
                     ExtractPages(mainFileLoc, outputName, page, page);
 
@@ -90,7 +217,8 @@ namespace PDFExploder
 
         static void Main(string[] args)
         {
-            ExpandW2();
+            ExtractPayslips();
+          //  ExpandW2();
 
             return;
 
